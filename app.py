@@ -33,38 +33,27 @@ if 'df' not in st.session_state:
     
 # --- Módulo 1: Carregamento de Dados (Para o Teste do Professor) ---
 
-def load_data(uploaded_file):
+def load_data(uploaded_file, llm_instance): # << Adicione 'llm_instance' aqui
     """Carrega o CSV, inicializa o DataFrame e reinicia o ponteiro do objeto de arquivo."""
     try:
-        # 1. Lê o arquivo. O ponteiro fica no final.
+        # 1. Lê o arquivo.
         df = pd.read_csv(uploaded_file)
         
-        # 2. **CRUCIAL**: Reinicia o ponteiro de leitura do objeto de arquivo para o início (byte 0).
-        # Isso garante que o LangChain possa ler o arquivo a partir do começo.
-        uploaded_file.seek(0) # << LINHA CHAVE ADICIONAL
+        # 2. Reinicia o ponteiro de leitura do objeto de arquivo.
+        uploaded_file.seek(0)
         
-        # 3. Salva o DataFrame e o objeto de arquivo na sessão
-
-        #Bloco anterior, somente para o CREDITCARD.CSV
-        #st.session_state['df'] = df
-        #st.session_state['uploaded_file_object'] = uploaded_file
-        #st.session_state['memoria_conclusoes'] = initial_analysis_and_memory(df)
-        #
-        #st.success("Arquivo carregado com sucesso! Pronto para perguntar.")
+        # 3. Chama a função de memória com o LLM para análise autônoma
+        # Note que você passa 'df' e 'llm_instance' (o novo nome do parâmetro)
+        st.session_state['memoria_conclusoes'] = initial_analysis_and_memory(df, llm_instance)
         
-        #Novo bloco de código, permitindo qualquer CSV com tratamento via LLM
+        # 4. Salva o DataFrame e o objeto de arquivo na sessão
         st.session_state['df'] = df
         st.session_state['uploaded_file_object'] = uploaded_file
-        uploaded_file.seek(0)
-
-        # Chama a função de memória com o LLM para análise autônoma
-        st.session_state['memoria_conclusoes'] = initial_analysis_and_memory(df, llm_instance)
 
         st.success("Arquivo carregado e análise inicial autônoma concluída! Pronto para perguntar.")
-
-
+        
     except Exception as e:
-        st.error(f"Erro ao carregar o arquivo: {e}")
+        st.error(f"Erro ao carregar o arquivo ou gerar análise inicial: {e}")
 
 
 # --- Módulo 2: Geração de Conclusões Iniciais (A Memória) ---
