@@ -12,6 +12,9 @@ from dotenv import load_dotenv
 # Carrega a variável de ambiente (Chave da API)
 load_dotenv()
 
+# Inicialização no escopo global para evitar NameError
+llm = None 
+
 # --- Configurações Iniciais e Layout do Streamlit ---
 
 st.set_page_config(
@@ -196,33 +199,60 @@ def create_and_run_agent(file_input, question, llm):
 # --- Sidebar e Interação do Usuário ---
 
 with st.sidebar:
+    #Este bloco abaixo estava mantendo o streamlit sempre esperando a chave api da openai
+    #st.header("Upload do Dataset")
+    #uploaded_file = st.file_uploader("Escolha um arquivo CSV", type="csv")
+
+    ##Chamada anterior, somente para CREDITCARD.CSV
+    ##if uploaded_file is not None and st.session_state['df'] is None:
+    ##    load_data(uploaded_file) 
+    # 
+    ## Novo bloco de código, para permitir tratar via LLM qualquer CSV
+    #if uploaded_file is not None and st.session_state['df'] is None:
+    #    # Mude a chamada para garantir que o LLM esteja disponível
+    #    if llm is not None:
+    #        load_data(uploaded_file, llm) # Passe o LLM como argumento
+    #    else:
+    #        st.warning("Carregue o CSV e insira a chave API para inicializar o agente.")
+
+    #st.header("Configuração da LLM")
+    #
+    ## Use a chave da .env, mas permite que o usuário sobrescreva
+    #api_key = os.getenv("OPENAI_API_KEY", "") 
+    #openai_api_key = st.text_input("Sua Chave OpenAI API", type="password", value=api_key)
+    #
+    #if openai_api_key:
+    #    llm = OpenAI(openai_api_key=openai_api_key, temperature=0.0)
+    #else:
+    #    st.warning("Por favor, insira sua chave da OpenAI ou configure o arquivo .env.")
+    #    llm = None
+
+    #Correção do bloco acima
     st.header("Upload do Dataset")
     uploaded_file = st.file_uploader("Escolha um arquivo CSV", type="csv")
-
-    #Chamada anterior, somente para CREDITCARD.CSV
-    #if uploaded_file is not None and st.session_state['df'] is None:
-    #    load_data(uploaded_file) 
-     
-    # Novo bloco de código, para permitir tratar via LLM qualquer CSV
-    if uploaded_file is not None and st.session_state['df'] is None:
-        # Mude a chamada para garantir que o LLM esteja disponível
-        if llm is not None:
-            load_data(uploaded_file, llm) # Passe o LLM como argumento
-        else:
-            st.warning("Carregue o CSV e insira a chave API para inicializar o agente.")
-
-    st.header("Configuração da LLM")
     
-    # Use a chave da .env, mas permite que o usuário sobrescreva
+    st.header("Configuração da LLM")
     api_key = os.getenv("OPENAI_API_KEY", "") 
     openai_api_key = st.text_input("Sua Chave OpenAI API", type="password", value=api_key)
     
+    # 1. Definição da instância LLM
     if openai_api_key:
-        llm = OpenAI(openai_api_key=openai_api_key, temperature=0.0)
+        # Nota: Você pode usar a otimização com st.cache_resource aqui!
+        llm = OpenAI(openai_api_key=openai_api_key, temperature=0.0) 
     else:
-        st.warning("Por favor, insira sua chave da OpenAI ou configure o arquivo .env.")
         llm = None
         
+    # 2. Lógica de Carregamento de Dados (BLOCO 2)
+    # Garante que o llm esteja definido antes de chamar load_data
+    if uploaded_file is not None and st.session_state['df'] is None:
+        if llm is not None:
+            # =======================================================
+            # <<< AQUI COMEÇA O BLOCO 2 (Chamada da Lógica de Dados) >>>
+            load_data(uploaded_file, llm) # Note que 'llm' é passado como argumento
+            # =======================================================
+        else:
+            st.warning("Por favor, insira sua chave da OpenAI e carregue o CSV para inicializar o agente.")
+
     st.markdown("---")
     st.markdown("Requisitos do Trabalho:")
     st.markdown("- 4 Perguntas (sendo 1 gráfica)")
