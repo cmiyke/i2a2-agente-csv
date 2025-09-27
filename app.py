@@ -30,38 +30,6 @@ if 'df' not in st.session_state:
     
 # --- Módulo 1: Carregamento de Dados (Para o Teste do Professor) ---
 
-#def load_data(uploaded_file):
-#    """Carrega o CSV e inicializa o DataFrame na sessão."""
-#    try:
-#        df = pd.read_csv(uploaded_file)
-#        
-#        # Realiza uma análise inicial para preencher a memória (requisito 4)
-#        st.session_state['df'] = df
-#        st.session_state['memoria_conclusoes'] = initial_analysis_and_memory(df)
-#        
-#        st.success("Arquivo carregado com sucesso! Pronto para perguntar.")
-#        
-#    except Exception as e:
-#        st.error(f"Erro ao carregar o arquivo: {e}")
-#
-# Onde você salva o DataFrame, salve também o objeto de upload
-#def load_data(uploaded_file):
-#    """Carrega o CSV e inicializa o DataFrame e o objeto de arquivo na sessão."""
-#    try:
-#        df = pd.read_csv(uploaded_file)
-#        
-#        # Salva o DataFrame e o objeto de arquivo (que LangChain precisa)
-#        st.session_state['df'] = df
-#        st.session_state['uploaded_file_object'] = uploaded_file # << NOVO
-#        st.session_state['memoria_conclusoes'] = initial_analysis_and_memory(df)
-#        
-#        st.success("Arquivo carregado com sucesso! Pronto para perguntar.")
-#        
-#    except Exception as e:
-#        st.error(f"Erro ao carregar o arquivo: {e}")
-#
-# Seu código, aproximadamente Linha 40
-
 def load_data(uploaded_file):
     """Carrega o CSV, inicializa o DataFrame e reinicia o ponteiro do objeto de arquivo."""
     try:
