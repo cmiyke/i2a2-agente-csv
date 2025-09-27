@@ -41,49 +41,115 @@ def load_data(uploaded_file):
         uploaded_file.seek(0) # << LINHA CHAVE ADICIONAL
         
         # 3. Salva o DataFrame e o objeto de arquivo na sessão
+
+        #Bloco anterior, somente para o CREDITCARD.CSV
+        #st.session_state['df'] = df
+        #st.session_state['uploaded_file_object'] = uploaded_file
+        #st.session_state['memoria_conclusoes'] = initial_analysis_and_memory(df)
+        #
+        #st.success("Arquivo carregado com sucesso! Pronto para perguntar.")
+        
+        #Novo bloco de código, permitindo qualquer CSV com tratamento via LLM
         st.session_state['df'] = df
         st.session_state['uploaded_file_object'] = uploaded_file
-        st.session_state['memoria_conclusoes'] = initial_analysis_and_memory(df)
-        
-        st.success("Arquivo carregado com sucesso! Pronto para perguntar.")
-        
+        uploaded_file.seek(0)
+
+        # Chama a função de memória com o LLM para análise autônoma
+        st.session_state['memoria_conclusoes'] = initial_analysis_and_memory(df, llm_instance)
+
+        st.success("Arquivo carregado e análise inicial autônoma concluída! Pronto para perguntar.")
+
+
     except Exception as e:
         st.error(f"Erro ao carregar o arquivo: {e}")
 
 
 # --- Módulo 2: Geração de Conclusões Iniciais (A Memória) ---
 
-def initial_analysis_and_memory(df: pd.DataFrame) -> str:
-    """Realiza análises chaves para preencher a 'memória' do agente."""
+# Crie uma versão simplificada do agente SEM a parte do Streamlit
+def run_llm_analysis(df, prompt, llm):
+    """Executa uma análise única e retorna a resposta."""
+    # Nota: Você pode precisar redefinir o objeto de arquivo para o LangChain, 
+    # mas para simplificar, usaremos o df diretamente (se o LangChain suportar, 
+    # senão precisaremos salvar e ler o CSV temporariamente).
     
-    # 1. Análise de Desbalanceamento
-    total = len(df)
-    fraudes = df['Class'].sum()
-    percent_fraude = (fraudes / total) * 100
+    # Vamos usar o Agente CSV que você já tem, mas com uma instrução mais curta.
+    # OBS: Se você já tem a instância do LLM, reutilize-a!
+
+    temp_agent = create_csv_agent(
+        llm,
+        df.to_csv(index=False), # Convertendo o DF para string CSV (objeto file-like)
+        verbose=False,
+        agent_type=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
+        # Instrução genérica para a análise inicial
+        prefix="Você deve executar uma Análise Exploratória de Dados (EDA) e retornar um resumo em texto. Não use o formato Thought/Action. Liste as colunas numéricas, estatísticas chave, e quaisquer colunas que pareçam desbalanceadas ou com alta correlação.",
+        handle_parsing_errors=True,
+        max_iterations=5
+    )
     
-    # 2. Correlações Chaves (foco nas variáveis PCA mais fortes)
-    # Calcule a correlação de todas as colunas com 'Class'
-    correlations = df.corr()['Class'].sort_values(key=abs, ascending=False).drop('Class')
-    top_negative = correlations[correlations < 0].head(3)
+    try:
+        # Pede ao LLM para fazer a análise de 5 minutos sobre o novo CSV
+        return temp_agent.run(prompt)
+    except Exception as e:
+        return f"Falha ao gerar análise inicial autônoma: {e}"
+
+
+# Analise de conclusões fixas para o arquivo CREDITCARD.CSV
+#
+#def initial_analysis_and_memory(df: pd.DataFrame) -> str:
+#    """Realiza análises chaves para preencher a 'memória' do agente."""
+#    
+#    # 1. Análise de Desbalanceamento
+#    total = len(df)
+#    fraudes = df['Class'].sum()
+#    percent_fraude = (fraudes / total) * 100
+#    
+#    # 2. Correlações Chaves (foco nas variáveis PCA mais fortes)
+#    # Calcule a correlação de todas as colunas com 'Class'
+#    correlations = df.corr()['Class'].sort_values(key=abs, ascending=False).drop('Class')
+#    top_negative = correlations[correlations < 0].head(3)
+#    
+#    # 3. Análise da Variável Amount (para mostrar variabilidade)
+#    amount_stats = df['Amount'].describe().to_string()
+#    
+#    # Constrói o texto de "memória" que o agente usará na Pergunta 4
+#    memoria_text = f"""
+#    O agente realizou uma análise inicial do conjunto de dados e obteve as seguintes conclusões:
+#    
+#    1. **Desbalanceamento de Classe**: O conjunto de dados é extremamente desbalanceado. A classe positiva (fraude) representa apenas **{percent_fraude:.3f}%** das transações ({fraudes} fraudes em {total} transações). Qualquer modelo de classificação deve usar métricas como AUPRC.
+#    
+#    2. **Variáveis PCA Relevantes**: As variáveis resultantes da PCA que demonstram a maior correlação com a fraude ('Class') são:
+#        * **V17** (negativa, indicando que valores baixos desta componente estão ligados à fraude).
+#        * **V14** (negativa, similar à V17).
+#        * **V10** (negativa).
+#        
+#    3. **Estatísticas da Variável Amount**: O valor das transações ('Amount') possui uma alta variabilidade. As estatísticas descritivas são:\n{amount_stats}
+#    
+#    4. **Padrão Temporal (Potencial)**: A variável 'Time' deve ser analisada cuidadosamente para identificar se as fraudes se concentram em períodos específicos do dia (visto que o 'Time' está em segundos desde a primeira transação).
+#    """
+#    
+#    return memoria_text
+
+
+# Nova função para gerar conclusões com analise da LLM, flexibilizando o código para aceitar qualquer CSV
+
+def initial_analysis_and_memory(df: pd.DataFrame, llm_instance) -> str:
+    """Gera o texto de memória de forma autônoma usando o LLM."""
     
-    # 3. Análise da Variável Amount (para mostrar variabilidade)
-    amount_stats = df['Amount'].describe().to_string()
-    
-    # Constrói o texto de "memória" que o agente usará na Pergunta 4
-    memoria_text = f"""
-    O agente realizou uma análise inicial do conjunto de dados e obteve as seguintes conclusões:
-    
-    1. **Desbalanceamento de Classe**: O conjunto de dados é extremamente desbalanceado. A classe positiva (fraude) representa apenas **{percent_fraude:.3f}%** das transações ({fraudes} fraudes em {total} transações). Qualquer modelo de classificação deve usar métricas como AUPRC.
-    
-    2. **Variáveis PCA Relevantes**: As variáveis resultantes da PCA que demonstram a maior correlação com a fraude ('Class') são:
-        * **V17** (negativa, indicando que valores baixos desta componente estão ligados à fraude).
-        * **V14** (negativa, similar à V17).
-        * **V10** (negativa).
-        
-    3. **Estatísticas da Variável Amount**: O valor das transações ('Amount') possui uma alta variabilidade. As estatísticas descritivas são:\n{amount_stats}
-    
-    4. **Padrão Temporal (Potencial)**: A variável 'Time' deve ser analisada cuidadosamente para identificar se as fraudes se concentram em períodos específicos do dia (visto que o 'Time' está em segundos desde a primeira transação).
+    # 1. Prompt genérico para análise inicial:
+    prompt = f"""
+    Realize uma análise exploratória (EDA) detalhada deste conjunto de dados.
+    Suas conclusões devem cobrir:
+    1.  **Tipos de Dados**: Quais colunas são numéricas, e quais são categóricas/binárias?
+    2.  **Distribuições**: Quais variáveis têm a maior variância ou a distribuição mais assimétrica?
+    3.  **Outliers/Desbalanceamento**: Existe alguma coluna binária que está altamente desbalanceada (como 'Class' no dataset original de fraudes) ou colunas com outliers extremos (como 'Amount')?
+    4.  **Correlações**: Quais são as duas correlações mais fortes entre quaisquer duas colunas (incluindo a correlação com a coluna alvo, se ela for clara)?
     """
+    
+    st.info("Gerando análise inicial autônoma do novo CSV. Isso pode levar alguns segundos...")
+    
+    # 2. Executa o Agente LLM para obter o resumo:
+    memoria_text = run_llm_analysis(df, prompt, llm_instance)
     
     return memoria_text
 
@@ -133,9 +199,18 @@ with st.sidebar:
     st.header("Upload do Dataset")
     uploaded_file = st.file_uploader("Escolha um arquivo CSV", type="csv")
 
+    #Chamada anterior, somente para CREDITCARD.CSV
+    #if uploaded_file is not None and st.session_state['df'] is None:
+    #    load_data(uploaded_file) 
+     
+    # Novo bloco de código, para permitir tratar via LLM qualquer CSV
     if uploaded_file is not None and st.session_state['df'] is None:
-        load_data(uploaded_file)
-        
+        # Mude a chamada para garantir que o LLM esteja disponível
+        if llm is not None:
+            load_data(uploaded_file, llm) # Passe o LLM como argumento
+        else:
+            st.warning("Carregue o CSV e insira a chave API para inicializar o agente.")
+
     st.header("Configuração da LLM")
     
     # Use a chave da .env, mas permite que o usuário sobrescreva
