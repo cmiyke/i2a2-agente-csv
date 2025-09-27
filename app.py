@@ -33,28 +33,50 @@ if 'df' not in st.session_state:
     
 # --- Módulo 1: Carregamento de Dados (Para o Teste do Professor) ---
 
-def load_data(uploaded_file, llm_instance): # << Adicione 'llm_instance' aqui
-    """Carrega o CSV, inicializa o DataFrame e reinicia o ponteiro do objeto de arquivo."""
+#def load_data(uploaded_file, llm_instance): # << Adicione 'llm_instance' aqui
+#    """Carrega o CSV, inicializa o DataFrame e reinicia o ponteiro do objeto de arquivo."""
+#    try:
+#        # 1. Lê o arquivo.
+#        df = pd.read_csv(uploaded_file)
+#        
+#        # 2. Reinicia o ponteiro de leitura do objeto de arquivo.
+#        uploaded_file.seek(0)
+#        
+#        # 3. Chama a função de memória com o LLM para análise autônoma
+#        # Note que você passa 'df' e 'llm_instance' (o novo nome do parâmetro)
+#        st.session_state['memoria_conclusoes'] = initial_analysis_and_memory(df, llm_instance)
+#        
+#        # 4. Salva o DataFrame e o objeto de arquivo na sessão
+#        st.session_state['df'] = df
+#        st.session_state['uploaded_file_object'] = uploaded_file
+#
+#        st.success("Arquivo carregado e análise inicial autônoma concluída! Pronto para perguntar.")
+#        
+#    except Exception as e:
+#        st.error(f"Erro ao carregar o arquivo ou gerar análise inicial: {e}")
+
+# Modifique a função load_data para chamar a nova função:
+def load_data(uploaded_file, llm_instance): 
+    """Carrega o CSV e delega a geração de memória."""
     try:
-        # 1. Lê o arquivo.
+        # 1. LÊ e salva o DF (apenas para exibição e a primeira leitura rápida)
         df = pd.read_csv(uploaded_file)
         
-        # 2. Reinicia o ponteiro de leitura do objeto de arquivo.
+        # 2. Reinicia o ponteiro do arquivo.
         uploaded_file.seek(0)
         
-        # 3. Chama a função de memória com o LLM para análise autônoma
-        # Note que você passa 'df' e 'llm_instance' (o novo nome do parâmetro)
-        st.session_state['memoria_conclusoes'] = initial_analysis_and_memory(df, llm_instance)
+        # 3. CHAMA A FUNÇÃO DE MEMÓRIA com o objeto de arquivo
+        # O objeto de arquivo é passado para que o agente possa lê-lo de forma eficiente.
+        st.session_state['memoria_conclusoes'] = initial_analysis_and_memory(uploaded_file, llm_instance)
         
-        # 4. Salva o DataFrame e o objeto de arquivo na sessão
+        # 4. Salva o DF e o objeto para uso posterior
         st.session_state['df'] = df
         st.session_state['uploaded_file_object'] = uploaded_file
 
         st.success("Arquivo carregado e análise inicial autônoma concluída! Pronto para perguntar.")
         
     except Exception as e:
-        st.error(f"Erro ao carregar o arquivo ou gerar análise inicial: {e}")
-
+        st.error(f"Erro fatal: {e}")
 
 # --- Módulo 2: Geração de Conclusões Iniciais (A Memória) ---
 
@@ -125,25 +147,63 @@ def run_llm_analysis(df, prompt, llm):
 
 # Nova função para gerar conclusões com analise da LLM, flexibilizando o código para aceitar qualquer CSV
 
-def initial_analysis_and_memory(df: pd.DataFrame, llm_instance) -> str:
+#def initial_analysis_and_memory(df: pd.DataFrame, llm_instance) -> str:
+#    """Gera o texto de memória de forma autônoma usando o LLM."""
+#    
+#    # 1. Prompt genérico para análise inicial:
+#    prompt = f"""
+#    Realize uma análise exploratória (EDA) detalhada deste conjunto de dados.
+#    Suas conclusões devem cobrir:
+#    1.  **Tipos de Dados**: Quais colunas são numéricas, e quais são categóricas/binárias?
+#    2.  **Distribuições**: Quais variáveis têm a maior variância ou a distribuição mais assimétrica?
+#    3.  **Outliers/Desbalanceamento**: Existe alguma coluna binária que está altamente desbalanceada (como 'Class' no dataset original de fraudes) ou colunas com outliers extremos (como 'Amount')?
+#    4.  **Correlações**: Quais são as duas correlações mais fortes entre quaisquer duas colunas (incluindo a correlação com a coluna alvo, se ela for clara)?
+#    """
+#    
+#    st.info("Gerando análise inicial autônoma do novo CSV. Isso pode levar alguns segundos...")
+#    
+#    # 2. Executa o Agente LLM para obter o resumo:
+#    memoria_text = run_llm_analysis(df, prompt, llm_instance)
+#    
+#    return memoria_text
+
+# A função AGORA RECEBE o objeto de arquivo (uploaded_file_object) E o LLM
+def initial_analysis_and_memory(uploaded_file_object, llm_instance) -> str:
     """Gera o texto de memória de forma autônoma usando o LLM."""
     
-    # 1. Prompt genérico para análise inicial:
+    st.info("Gerando análise inicial autônoma do novo CSV. Isso pode levar alguns segundos...")
+    
+    # 1. Prompt genérico (separe em uma variável para maior clareza)
     prompt = f"""
     Realize uma análise exploratória (EDA) detalhada deste conjunto de dados.
     Suas conclusões devem cobrir:
     1.  **Tipos de Dados**: Quais colunas são numéricas, e quais são categóricas/binárias?
     2.  **Distribuições**: Quais variáveis têm a maior variância ou a distribuição mais assimétrica?
-    3.  **Outliers/Desbalanceamento**: Existe alguma coluna binária que está altamente desbalanceada (como 'Class' no dataset original de fraudes) ou colunas com outliers extremos (como 'Amount')?
-    4.  **Correlações**: Quais são as duas correlações mais fortes entre quaisquer duas colunas (incluindo a correlação com a coluna alvo, se ela for clara)?
+    3.  **Outliers/Desbalanceamento**: Existe alguma coluna binária que está altamente desbalanceada (como 'Class' se existir) ou colunas com outliers extremos?
+    4.  **Correlações**: Quais são as duas correlações mais fortes entre quaisquer duas colunas?
     """
-    
-    st.info("Gerando análise inicial autônoma do novo CSV. Isso pode levar alguns segundos...")
-    
-    # 2. Executa o Agente LLM para obter o resumo:
-    memoria_text = run_llm_analysis(df, prompt, llm_instance)
-    
-    return memoria_text
+
+    try:
+        # **CRUCIAL**: Reinicia o ponteiro antes de criar o agente, para que ele possa ler.
+        uploaded_file_object.seek(0) 
+
+        # 2. Cria o agente TEMPORÁRIO (passando o objeto de arquivo)
+        temp_agent = create_csv_agent(
+            llm_instance,
+            uploaded_file_object, # <<< USA O OBJETO DE ARQUIVO, NÃO A STRING DE CSV
+            verbose=False, # Mantenha o verbose em False aqui para evitar logs excessivos
+            agent_type=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
+            prefix="Você deve executar uma Análise Exploratória de Dados (EDA) e retornar um resumo em texto. Não use o formato Thought/Action.",
+            agent_executor_kwargs={"handle_parsing_errors": True},
+            max_iterations=8 # Pode ser necessário um valor ligeiramente maior para EDA complexa
+        )
+        
+        # 3. Executa a análise:
+        memoria_text = temp_agent.run(prompt)
+        return memoria_text
+        
+    except Exception as e:
+        return f"Falha catastrófica ao gerar análise inicial autônoma: {e}"
 
 
 # --- Módulo 3: Criação e Execução do Agente LangChain ---
