@@ -12,7 +12,11 @@ from langchain.agents import initialize_agent
 from langchain.tools import Tool
 from langchain_experimental.tools.python.tool import PythonREPLTool
 from langchain.memory import ConversationBufferMemory
+from langchain_core.messages import HumanMessage, AIMessage # Novo import necessário
 from io import StringIO
+from langchain.tools import Tool
+from langchain.memory import ConversationBufferMemory
+from typing import Dict, Any
 
 # Carrega a variável de ambiente (Chave da API)
 load_dotenv()
@@ -20,17 +24,58 @@ load_dotenv()
 # Inicialização no escopo global para evitar NameError
 llm = None 
 
-# Prefix para a criação do agente principal - create_and_run_agent
+# --- Prefixo Completo para o Agente Principal ---
+#prefix_completo = (
+#    "Você é um especialista em análise de dados. Suas ferramentas são 'python_repl_ast' e 'buscar_memoria_EDA'. "
+#    "Sua missão é SEMPRE fornecer uma ANÁLISE DETALHADA e SEMPRE responder em Português do Brasil. "
+#    "A fonte primária e mais confiável de informação é a sua memória, acessada por 'buscar_memoria_EDA'."
+#    
+#    # ⚠️ REGRAS DE BUSCA E EXTRAÇÃO DE DADOS (Resolve o problema de resumo e extração)
+#    
+#    # Regra 1: Ação para Resumo/Conclusões (NOVO TEXTO MAIS DIRETO)
+#    "1. SE A PERGUNTA DO USUÁRIO BUSCAR ANÁLISE INICIAL, CONCLUSÕES OU RESUMO, VOCÊ DEVE USAR A FERRAMENTA 'buscar_memoria_EDA' COM O **Action Input EXATO: 'Análise Exploratória Completa'**. Esta ação deve ser sua prioridade absoluta para essas perguntas."
+#
+#    # Regra 2: Ação para Dados Específicos (Permanece a mesma)
+#    "2. Se a pergunta for sobre um dado específico (média, correlação, desvio padrão), o Action Input deve ser a **pergunta completa** (ex: 'Qual a correlação de V17 com Class?')."
+#    
+#    # ⚠️ REGRAS DE BUSCA E EXTRAÇÃO DE DADOS (Vamos focar na prioridade)
+#    # Regra 3 e 4: Como extrair
+#    "3. Após usar 'buscar_memoria_EDA', leia a 'Observation' e **extraia APENAS o número ou a informação solicitada na pergunta atual.**"
+#    "4. Para extrair correlação, procure o valor na linha da variável V(n) e na coluna 'Class' dentro da tabela de estatísticas da Observation."
+#    
+#    # ⚠️ REGRAS DE FORMATAÇÃO DE RESPOSTA (Resolve o problema de repetição)
+#    "5. Depois de concluir sua análise, **VOCÊ DEVE FINALIZAR O PROCESSO COM A TAG 'Final Answer:'** seguida da sua resposta completa. Nunca gere a resposta final detalhada apenas no THOUGHT."
+#    "6. Sua resposta final DEVE ser única e relevante para a pergunta mais recente do usuário."
+#    
+#    # ⚠️ REGRAS DE USO DE CÓDIGO (Regras de contorno do NameError, ignorando gráficos por enquanto)
+#    "7. NUNCA use a ferramenta 'python_repl_ast' para tentar calcular estatísticas ou buscar colunas."
+#    "8. Se a pergunta for sobre um gráfico (e.g., boxplot), utilize a 'buscar_memoria_EDA' para obter os dados estatísticos e **forneça uma ANÁLISE TEXTUAL COMPLETA** da distribuição, explicando que não pode renderizar o boxplot visualmente."
+#)
 prefix_completo = (
-    "Você é um especialista em análise de dados. Sua única ferramenta é 'python_repl_ast'. "
+    "Você é um especialista em análise de dados. Suas ferramentas são 'python_repl_ast' e 'buscar_memoria_EDA'. "
     "Sua missão é SEMPRE fornecer uma ANÁLISE DETALHADA e SEMPRE responder em Português do Brasil. "
+    "A fonte primária e mais confiável de informação é a sua memória, acessada por 'buscar_memoria_EDA'."
     
-    "O formato de saída é RIGOROSO: Action Input DEVE conter APENAS CÓDIGO PYTHON. "
+    # ⚠️ REGRAS DE BUSCA E EXTRAÇÃO DE DADOS (AGORA FUNCIONA)
     
-    # ⚠️ INSTRUÇÃO DE OBRIGAÇÃO FINAL ⚠️
-    "Você DEVE ASSUMIR que a variável 'df' (DataFrame) e 'pd' (Pandas) JÁ EXISTEM e estão disponíveis. "
-    "SUA PRIMEIRA AÇÃO DEVE SER: Action: python_repl_ast\nAction Input: df.head() ou df.info() "
-    "NUNCA TENTE import pandas, pd.read_csv() ou qualquer código de carregamento de arquivo."
+    # Regra 1: Ação para Resumo/Conclusões (Reforça a conversão da intenção)
+    "1. SE A PERGUNTA DO USUÁRIO BUSCAR ANÁLISE INICIAL, CONCLUSÕES OU RESUMO, VOCÊ DEVE USAR A FERRAMENTA 'buscar_memoria_EDA' COM O **Action Input EXATO: 'Análise Exploratória Completa'**. Esta ação deve ser sua prioridade absoluta para essas perguntas."
+
+    # Regra 2: Ação para Dados Específicos
+    "2. Se a pergunta for sobre um dado específico (média, correlação, desvio padrão), o Action Input deve ser a **pergunta completa** (ex: 'Qual a correlação de V17 com Class?')."
+    
+    # ⚠️ REGRAS DE BUSCA E EXTRAÇÃO DE DADOS (Vamos focar na prioridade)
+    # Regra 3 e 4: Como extrair
+    "3. Após usar 'buscar_memoria_EDA', leia a 'Observation' e **extraia APENAS o número ou a informação solicitada na pergunta atual.**"
+    "4. Para extrair correlação, procure o valor na linha da variável V(n) e na coluna 'Class' dentro da tabela de estatísticas da Observation."
+    
+    # ⚠️ REGRAS DE FORMATAÇÃO DE RESPOSTA (Resolve o problema de repetição)
+    "5. Depois de concluir sua análise, **VOCÊ DEVE FINALIZAR O PROCESSO COM A TAG 'Final Answer:'** seguida da sua resposta completa. Nunca gere a resposta final detalhada apenas no THOUGHT."
+    "6. Sua resposta final DEVE ser única e relevante para a pergunta mais recente do usuário."
+    
+    # ⚠️ REGRAS DE USO DE CÓDIGO (Regras de contorno do NameError, ignorando gráficos por enquanto)
+    "7. NUNCA use a ferramenta 'python_repl_ast' para tentar calcular estatísticas ou buscar colunas."
+    "8. Se a pergunta for sobre um gráfico (e.g., boxplot), utilize a 'buscar_memoria_EDA' para obter os dados estatísticos e **forneça uma ANÁLISE TEXTUAL COMPLETA** da distribuição, explicando que não pode renderizar o boxplot visualmente."
 )
 
 # --- Configurações Iniciais e Layout do Streamlit ---
@@ -50,7 +95,83 @@ if 'df' not in st.session_state:
     st.session_state['memoria_conclusoes'] = ""
     
 # --- Módulo 1: Carregamento de Dados (Para o Teste do Professor) ---
+from langchain_core.messages import HumanMessage, AIMessage
 
+def smart_memory_lookup_tool(query: str, llm, memory) -> str:
+    """
+    Ferramenta que usa um sub-LLM para buscar a resposta na memória e retornar apenas o texto ou o dado.
+    
+    - Se a query for 'Análise Exploratória Completa', extrai o bloco de conclusões.
+    - Caso contrário, extrai um dado específico (média, correlação) da tabela.
+    """
+    
+    # 1. Obtém o conteúdo completo da memória (o texto longo da EDA)
+    memory_content = memory.buffer_as_str 
+    
+    # 2. Lógica para definir o prompt de busca interno (o 'sub-LLM')
+    
+    # ⚠️ CASO 1: EXTRAÇÃO DE RESUMO/CONCLUSÕES (Query Genérica)
+    if "Análise Exploratória Completa" in query:
+        search_prompt = (
+            "Você é um Sumarizador de Conclusões. Seu trabalho é extrair a análise textual da Análise Exploratória de Dados (EDA) que está no CONTEÚDO abaixo."
+
+            "\n\n--- INSTRUÇÃO DE EXTRAÇÃO ---\n"
+            "1. **Procure o texto exato** entre as tags `[INÍCIO DO RESUMO ANALÍTICO]` e `[FIM DO RESUMO ANALÍTICO]`."
+            "2. **Retorne APENAS o texto que está entre as tags**, sem incluir as tags em si."
+            "3. Se as tags não forem encontradas, retorne a primeira análise textual completa que encontrar, mas NUNCA a tabela Markdown."
+
+            f"\n\n--- CONTEÚDO DA EDA ---\n{memory_content}"
+            "\n\nRetorne agora a análise completa:"
+        )
+        
+    # ⚠️ CASO 2: EXTRAÇÃO DE DADOS ESPECÍFICOS (Query Específica)
+    else:
+        search_prompt = (
+            "Você é um Extrator de Dados de Tabelas Markdown. Sua única função é encontrar e retornar um valor específico de uma tabela de estatísticas descritivas (df.describe())."
+            
+            f"\n\n--- PERGUNTA (Sua meta) ---\n{query}"
+            
+            "\n\n--- INSTRUÇÃO DE EXTRAÇÃO ---\n"
+            "1. Procure na seção 'ESTATÍSTICAS COMPLETAS' do CONTEÚDO abaixo."
+            "2. Identifique o valor exato (média, desvio, ou correlação) solicitado na PERGUNTA. Ex: V17 com Class."
+            "3. **Retorne APENAS o número encontrado**, ou uma breve frase que o contenha (Ex: 'O valor é -0.326984')."
+            "4. Se a informação não for encontrada na tabela, diga 'Informação indisponível para esta variável'."
+            
+            f"\n\n--- CONTEÚDO DA EDA ---\n{memory_content}"
+            "\n\nExtraia o dado agora (NÃO GERE ANÁLISE LONGA):"
+        )
+        
+    # 3. Executa o LLM para extrair a resposta
+    try:
+        # Nota: O método .invoke() ou .generate() depende da sua implementação exata do LangChain.
+        # Estamos usando .invoke() para modelos recentes.
+        extraction_message = llm.invoke(search_prompt)
+        return extraction_message.content # Retorna apenas a extração limpa
+        
+    except Exception as e:
+        # Isso será a Observation do Agente Principal, que ele pode usar para responder
+        return f"Erro na extração de dados: {e}"
+
+
+def memory_lookup_tool(query: str, memory: ConversationBufferMemory) -> str:
+    """Ferramenta para buscar informações na análise exploratória de dados (EDA) da memória."""
+    # A memória é injetada no agente, então a acessamos diretamente.
+    
+    # Simplesmente retornamos o buffer (o histórico de chat) como texto para que o LLM o analise.
+    return memory.buffer_as_str
+    
+# --- ONDE VOCÊ CRIA A FERRAMENTA ---
+def create_memory_tool(memory_instance: ConversationBufferMemory, llm_instance) -> Tool:
+    """Retorna a ferramenta de busca de memória inteligente."""
+    return Tool(
+        name="buscar_memoria_EDA",
+        # ⚠️ CHAVE: Passa a LLM e a memória para a nova função
+        func=lambda q: smart_memory_lookup_tool(q, llm=llm_instance, memory=memory_instance),
+        description=(
+            "Use esta ferramenta EXCLUSIVAMENTE para buscar estatísticas (média, desvio, correlação) na Análise Exploratória de Dados (EDA). "
+            "Retorna APENAS o dado solicitado, sem o texto completo da EDA."
+        )
+    )
 
 # Modifique a função load_data para chamar a nova função:
 def load_data(uploaded_file, llm_instance): 
@@ -77,7 +198,12 @@ def load_data(uploaded_file, llm_instance):
             memory=memory_instance # <<< CORREÇÃO AQUI!
         )
         
-        # 5. Salva o DF e os objetos para uso posterior
+        # 5. Reinicia o ponteiro do arquivo NOVAMENTE para garantir que o AGENTE PRINCIPAL o encontre no Streamlit.
+        # Mesmo que a função initial_analysis_and_memory tenha reiniciado, é uma boa prática
+        # garantir o estado para o uso subsequente (eletivo, mas seguro).
+        uploaded_file.seek(0) # ⚠️ Adicionado novamente por segurança
+        
+        # 6. Salva o DF e os objetos para uso posterior
         st.session_state['df'] = df
         st.session_state['uploaded_file_object'] = uploaded_file
         
@@ -124,6 +250,7 @@ def run_llm_analysis(df, prompt, llm):
         return f"Falha ao gerar análise inicial autônoma: {e}"
 
 
+
 # Função para realizar a análise exploratória e salvar na memória
 def initial_analysis_and_memory(file_input, llm, memory):
     # --- 1. CARREGAR O DATAFRAME FORA DO AGENTE ---
@@ -139,49 +266,55 @@ def initial_analysis_and_memory(file_input, llm, memory):
 
     # Capturar df.describe() como Markdown
     df_describe_str = df.describe(include='all').to_markdown()
-
     # --- 3. CONSTRUIR O PROMPT COM O CONTEXTO FORÇADO ---
-    
-    initial_analysis_prompt = (
-        "O DataFrame para análise já está carregado. Você não precisa executar nenhum código."
+    initial_analysis_prompt_text = (
+        "Você é um analista de dados especialista e só fala Português do Brasil. "
         "Sua tarefa é ler as informações estruturais e estatísticas abaixo e fornecer um "
-        "resumo de Análise Exploratória de Dados (EDA) detalhado e em Português do Brasil. "
-        "Foque na distribuição de dados, valores nulos, desbalanceamento da variável 'Class' e quaisquer anomalias. "
-        
+        "resumo de Análise Exploratória de Dados (EDA) detalhado, SEGUINDO O FORMATO SOLICITADO. "
+
         "\n\n--- INFORMAÇÕES DO DATAFRAME (df) ---\n"
         f"ESTRUTURA (df.info()):\n{df_info_str}\n\n"
-        f"ESTATÍSTICAS (df.describe()):\n{df_describe_str}\n"
+        f"ESTATÍSTICAS (df.describe()):\n{df_describe_str}\n" 
         "-------------------------------------\n\n"
-        "Gere a análise em Português agora, com no mínimo 200 palavras."
+
+        # ⚠️ INSTRUÇÕES CRÍTICAS PARA O RESUMO TEXTUAL (Incluindo as Tags)
+        "1. Comece sua resposta com a tag **[INÍCIO DO RESUMO ANALÍTICO]**."
+        "2. Forneça a análise detalhada (resumo da EDA). A análise deve ser longa e completa, abordando todos os pontos do dataframe (estrutura, balanceamento da Class, variações de V-Columns, e outliers em Amount)."
+        "3. Termine o resumo analítico com a tag **[FIM DO RESUMO ANALÍTICO]**."
+        "4. APÓS a tag de fim, insira O TÍTULO 'ESTATÍSTICAS COMPLETAS' e, logo abaixo, a tabela de df.describe() no formato Markdown."
+        
+        "\n\n**Gere a análise AGORA, respeitando estritamente a ordem e as tags:**"
     )
-
-    # --- 4. CONFIGURAR E EXECUTAR O AGENTE TEMPORÁRIO (SEM EXECUÇÃO DE CÓDIGO) ---
+    #initial_analysis_prompt_text = (
+    #    "Você é um analista de dados especialista e só fala Português do Brasil. "
+    #    "Sua tarefa é ler as informações estruturais e estatísticas abaixo e fornecer um "
+    #    "resumo de Análise Exploratória de Dados (EDA) detalhado. "
+#
+    #    # ⚠️ NOVO FOCO: Incluir a tabela completa
+    #    "Você DEVE incluir a tabela de estatísticas descritivas COMPLETA (df.describe()) no formato Markdown logo após o resumo textual."
+#
+    #    "\n\n--- INFORMAÇÕES DO DATAFRAME (df) ---\n"
+    #    f"ESTRUTURA (df.info()):\n{df_info_str}\n\n"
+#
+    #    # Remova a estatística descritiva daqui se já a incluiu no resumo
+    #    # Se você quiser que o LLM as processe, mantenha-as:
+    #    f"ESTATÍSTICAS (df.describe()):\n{df_describe_str}\n" 
+    #    "-------------------------------------\n\n"
+#
+    #    # ⚠️ AQUI ESTÁ O AJUSTE FINAL: Repetir a tabela no final da resposta
+    #    "Gere a análise detalhada agora. Termine sua resposta com o título 'ESTATÍSTICAS COMPLETAS' seguido da tabela de df.describe() no formato Markdown."
+    #)
+    # --- 4. EXECUTAR O LLM DIRETAMENTE (SEM AGENTE) ---
+    print("Iniciando a Análise Exploratória de Dados (EDA) para a memória (LLM Direto)...")
     
-    # Ferramenta para satisfazer o requisito do Agente
-    python_tool = PythonREPLTool()
+    # ⚠️ NOVO CÓDIGO CRÍTICO: Usar o LLM diretamente
+    analysis_message = llm.invoke(initial_analysis_prompt_text)
+    analysis = analysis_message.content # Extrai o texto da resposta
     
-    tools = [
-        Tool(
-            name="python_repl_ast",
-            func=python_tool.run,
-            description="Esta ferramenta não é necessária, o contexto já foi fornecido."
-        )
-    ]
-
-    temp_agent = initialize_agent(
-        tools=tools,
-        llm=llm,
-        agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
-        verbose=False,
-        max_iterations=5,
-        handle_parsing_errors=True
-    )
-
-    print("Iniciando a Análise Exploratória de Dados (EDA) para a memória...")
-    analysis = temp_agent.run(initial_analysis_prompt)
     print("EDA concluída e salva na memória.")
 
-    # --- 5. SALVAR NA MEMÓRIA (CORREÇÃO APLICADA AQUI) ---
+    # --- 5. SALVAR NA MEMÓRIA ---
+    # Usamos o HumanMessage para simular a pergunta e o AIMessage para simular a resposta do assistente
     memory.save_context(
         inputs={"input": "Resumo da Análise Exploratória de Dados (EDA) do CSV"},
         outputs={"output": analysis}
@@ -189,62 +322,15 @@ def initial_analysis_and_memory(file_input, llm, memory):
     
     return analysis
 
-## A função AGORA RECEBE o objeto de arquivo (uploaded_file_object) E o LLM
-#def initial_analysis_and_memory(uploaded_file_object, llm_instance) -> str:
-#    """Gera o texto de memória de forma autônoma usando o LLM."""
-#    
-#    st.info("Gerando análise inicial autônoma do novo CSV. Isso pode levar alguns segundos...")
-#    
-#  
-#    #Modificação da variável prompt para exigir detalhes numéricos e evitar respostas genéricas.
-#    prompt = f"""
-#    Execute uma Análise Exploratória de Dados (EDA) detalhada neste conjunto de dados.
-#    Você **DEVE** executar código Python. Suas conclusões devem conter:
-#    
-#    1.  **Tipos de Dados**: O número total de colunas e uma lista das colunas numéricas (sem contar a primeira de índice).
-#    2.  **Desbalanceamento**: Se houver uma coluna binária (0/1) chamada 'Class' ou similar, reporte a **porcentagem exata** da classe minoritária. Caso contrário, reporte a coluna mais desbalanceada.
-#    3.  **Estatística Chave**: O **valor médio e o desvio padrão** da coluna chamada 'Amount' ou da **primeira coluna numérica** que não seja a de índice.
-#    
-#    A resposta deve ser um **texto de conclusão e síntese**, incorporando os valores numéricos exatos encontrados.
-#    """
-#
-#    try:
-#        # **CRUCIAL**: Reinicia o ponteiro antes de criar o agente, para que ele possa ler.
-#        uploaded_file_object.seek(0) 
-#
-#        # 2. Cria o agente TEMPORÁRIO (passando o objeto de arquivo)
-#        temp_agent = create_csv_agent(
-#            llm_instance,
-#            uploaded_file_object, # <<< USA O OBJETO DE ARQUIVO, NÃO A STRING DE CSV
-#            verbose=False, # Mantenha o verbose em False aqui para evitar logs excessivos
-#            agent_type=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
-#            allow_dangerous_code=True,
-#            prefix=(
-#                "Você é um especialista em Análise Exploratória de Dados (EDA). "
-#                "Sua **ÚNICA FERRAMENTA é 'python_repl_ast'**. "
-#                "Sua missão é realizar a EDA e retornar um resumo **SINTETIZADO e DETALHADO em Português do Brasil**. "
-#                
-#                # <<< INSTRUÇÃO CRÍTICA DE FORMATAÇÃO >>>
-#                "O Action Input DEVE conter **APENAS o código Python válido**, sem aspas, comentários ou texto adicional. "
-#                "O Action Input é estritamente para o REPL Python."
-#            ),
-#            agent_executor_kwargs={"handle_parsing_errors": True},
-#            max_iterations=20 # Pode ser necessário um valor ligeiramente maior para EDA complexa
-#        )
-#        
-#        # 3. Executa a análise:
-#        memoria_text = temp_agent.run(prompt)
-#        return memoria_text
-#        
-#    except Exception as e:
-#        return f"Falha catastrófica ao gerar análise inicial autônoma: {e}"
-#
 
 # --- Módulo 3: Criação e Execução do Agente LangChain ---
 
-
-def create_and_run_agent(file_input, question, llm):
+def create_and_run_agent(file_input, question, llm, memory_instance):
    
+    # Se você não puder garantir que pd e df são visíveis globalmente, 
+    # você pode forçar a declaração global, mas isso é opcional e depende da sua estrutura.
+    global pd, df # Remova essa linha se ela estiver causando problemas
+     
     # Reposicionar o ponteiro do arquivo para o início (essencial para Streamlit)
     file_input.seek(0) 
     
@@ -254,6 +340,8 @@ def create_and_run_agent(file_input, question, llm):
     # Crie a ferramenta (sem argumentos de escopo que falham)
     python_tool = PythonREPLTool() 
 
+    # Crie a nova ferramenta de memória
+    memory_tool = create_memory_tool(memory_instance, llm)
        
     tools = [
     Tool(
@@ -264,27 +352,18 @@ def create_and_run_agent(file_input, question, llm):
             "O DataFrame principal é a variável 'df' e a biblioteca Pandas é 'pd'. "
             "VOCÊ NUNCA PRECISA USAR 'pd.read_csv()'. O DataFrame JÁ ESTÁ CARREGADO NA VARIÁVEL 'df'."
         ),
-    )
+    ),
+    memory_tool # Adiciona a ferramenta de memória
 ]
-    #tools = [
-    #    Tool(
-    #        name="python_repl_ast",
-    #        func=python_tool.run,
-    #        description=(
-    #            "Uma ferramenta Python (REPL) que pode executar código Python para manipulação de dados e gráficos. "
-    #            # INSTRUÇÃO FINAL: Faça o agente usar a variável que está carregada no ambiente.
-    #            "O DataFrame principal para TODAS as análises é a variável 'df'. Você DEVE iniciar todo script com 'import pandas as pd' e utilizar o 'df'."
-    #        ),
-    #    )
-    #]
 
     # 3. Criar o Agente usando initialize_agent
     agent = initialize_agent(
         tools=tools,
         llm=llm,
+        memory=st.session_state['memory_instance'],
         agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
         verbose=True,
-        max_iterations=15,
+        max_iterations=20,
         
         # Injetar o prefixo
         agent_kwargs={
@@ -324,6 +403,12 @@ with st.sidebar:
             # <<< AQUI COMEÇA O BLOCO 2 (Chamada da Lógica de Dados) >>>
             load_data(uploaded_file, llm) # Note que 'llm' é passado como argumento
             # =======================================================
+            # No seu arquivo principal, após a execução de load_data 
+            # REMOVER ISSO DEPOIS DE TESTAR:
+            if 'memory_instance' in st.session_state:
+                print("Conteúdo da Memória:")
+                # Isto irá imprimir o histórico de chat, que deve conter a EDA
+                print(st.session_state['memory_instance'].buffer) 
         else:
             st.warning("Por favor, insira sua chave da OpenAI e carregue o CSV para inicializar o agente.")
 
@@ -349,38 +434,30 @@ if st.session_state['df'] is not None and llm is not None:
 
     if user_question:
         
-        # --- Lógica do Módulo de Memória ---
-        if "conclusões" in user_question.lower() or "análise inicial" in user_question.lower():
-            # Se for uma pergunta sobre a memória, usa a análise inicial preenchida
-            st.info("Resposta baseada na Análise Inicial (Memória do Agente):")
-            st.markdown(st.session_state['memoria_conclusoes'])
+        # Roda o agente LangChain para gerar e executar o código
+        #response = create_and_run_agent(st.session_state['df'], user_question, llm)
+        response = create_and_run_agent(st.session_state['uploaded_file_object'], user_question, llm, st.session_state['memory_instance']) # << USE ISSO
+        
+        # Formata a resposta
+        st.subheader("Resposta do Agente:")
+        
+        # Tenta exibir o gráfico gerado (se houver)
+        # O LangChain salva o gráfico em um buffer temporário que precisamos capturar.
+        # Este é um padrão comum em agentes de código.
+        try:
+            # O LangChain muitas vezes gera e exibe gráficos automaticamente.
+            # Se precisar de um controle mais fino:
+            # Crie uma pasta 'plots' e instrua a LLM a salvar lá.
             
-        # --- Lógica do Módulo de Execução de Código ---
-        else:
-            # Roda o agente LangChain para gerar e executar o código
-            #response = create_and_run_agent(st.session_state['df'], user_question, llm)
-            response = create_and_run_agent(st.session_state['uploaded_file_object'], user_question, llm) # << USE ISSO
-            
-            # Formata a resposta
-            st.subheader("Resposta do Agente:")
-            
-            # Tenta exibir o gráfico gerado (se houver)
-            # O LangChain salva o gráfico em um buffer temporário que precisamos capturar.
-            # Este é um padrão comum em agentes de código.
-            try:
-                # O LangChain muitas vezes gera e exibe gráficos automaticamente.
-                # Se precisar de um controle mais fino:
-                # Crie uma pasta 'plots' e instrua a LLM a salvar lá.
+            # Para simplificar, vamos instruir a LLM a gerar e o Streamlit a exibir o último plot.
+            st.write(response) # Exibe o texto da resposta
+            if plt.get_fignums():
+                # Se houver uma figura ativa após a execução do código, mostre-a
+                st.pyplot(plt.gcf())
                 
-                # Para simplificar, vamos instruir a LLM a gerar e o Streamlit a exibir o último plot.
-                st.write(response) # Exibe o texto da resposta
-                if plt.get_fignums():
-                    # Se houver uma figura ativa após a execução do código, mostre-a
-                    st.pyplot(plt.gcf())
-                    
-            except Exception as e:
-                st.write(f"Resposta do Agente: {response}")
-                st.error(f"Não foi possível exibir o gráfico. {e}")
+        except Exception as e:
+            st.write(f"Resposta do Agente: {response}")
+            st.error(f"Não foi possível exibir o gráfico. {e}")
                 
 
 else:
