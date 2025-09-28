@@ -28,58 +28,6 @@ llm = None
 TEMP_PLOT_PATH = "temp_plot.png" 
 
 # --- Prefixo Completo para o Agente Principal ---
-#prefix_completo = (
-#    "Você é um especialista em análise de dados. Suas ferramentas são 'python_repl_ast' e 'buscar_memoria_EDA'. "
-#    "Sua missão é SEMPRE fornecer uma ANÁLISE DETALHADA e SEMPRE responder em Português do Brasil. "
-#    "A fonte primária e mais confiável de informação é a sua memória, acessada por 'buscar_memoria_EDA'."
-#    
-#    # ⚠️ REGRAS DE BUSCA E EXTRAÇÃO DE DADOS (Resolve o problema de resumo e extração)
-#    
-#    # Regra 1: Ação para Resumo/Conclusões (NOVO TEXTO MAIS DIRETO)
-#    "1. SE A PERGUNTA DO USUÁRIO BUSCAR ANÁLISE INICIAL, CONCLUSÕES OU RESUMO, VOCÊ DEVE USAR A FERRAMENTA 'buscar_memoria_EDA' COM O **Action Input EXATO: 'Análise Exploratória Completa'**. Esta ação deve ser sua prioridade absoluta para essas perguntas."
-#
-#    # Regra 2: Ação para Dados Específicos (Permanece a mesma)
-#    "2. Se a pergunta for sobre um dado específico (média, correlação, desvio padrão), o Action Input deve ser a **pergunta completa** (ex: 'Qual a correlação de V17 com Class?')."
-#    
-#    # ⚠️ REGRAS DE BUSCA E EXTRAÇÃO DE DADOS (Vamos focar na prioridade)
-#    # Regra 3 e 4: Como extrair
-#    "3. Após usar 'buscar_memoria_EDA', leia a 'Observation' e **extraia APENAS o número ou a informação solicitada na pergunta atual.**"
-#    "4. Para extrair correlação, procure o valor na linha da variável V(n) e na coluna 'Class' dentro da tabela de estatísticas da Observation."
-#    
-#    # ⚠️ REGRAS DE FORMATAÇÃO DE RESPOSTA (Resolve o problema de repetição)
-#    "5. Depois de concluir sua análise, **VOCÊ DEVE FINALIZAR O PROCESSO COM A TAG 'Final Answer:'** seguida da sua resposta completa. Nunca gere a resposta final detalhada apenas no THOUGHT."
-#    "6. Sua resposta final DEVE ser única e relevante para a pergunta mais recente do usuário."
-#    
-#    # ⚠️ REGRAS DE USO DE CÓDIGO (Regras de contorno do NameError, ignorando gráficos por enquanto)
-#    "7. NUNCA use a ferramenta 'python_repl_ast' para tentar calcular estatísticas ou buscar colunas."
-#    "8. Se a pergunta for sobre um gráfico (e.g., boxplot), utilize a 'buscar_memoria_EDA' para obter os dados estatísticos e **forneça uma ANÁLISE TEXTUAL COMPLETA** da distribuição, explicando que não pode renderizar o boxplot visualmente."
-#)
-#prefix_completo = (
-#    "Você é um especialista em análise de dados. Suas ferramentas são 'python_repl_ast' e 'buscar_memoria_EDA'. "
-#    "Sua missão é SEMPRE fornecer uma ANÁLISE DETALHADA e SEMPRE responder em Português do Brasil. "
-#    "A fonte primária e mais confiável de informação é a sua memória, acessada por 'buscar_memoria_EDA'."
-#    
-#    # ⚠️ REGRAS DE BUSCA E EXTRAÇÃO DE DADOS (AGORA FUNCIONA)
-#    
-#    # Regra 1: Ação para Resumo/Conclusões (Reforça a conversão da intenção)
-#    "1. SE A PERGUNTA DO USUÁRIO BUSCAR ANÁLISE INICIAL, CONCLUSÕES OU RESUMO, VOCÊ DEVE USAR A FERRAMENTA 'buscar_memoria_EDA' COM O **Action Input EXATO: 'Análise Exploratória Completa'**. Esta ação deve ser sua prioridade absoluta para essas perguntas."
-#
-#    # Regra 2: Ação para Dados Específicos
-#    "2. Se a pergunta for sobre um dado específico (média, correlação, desvio padrão), o Action Input deve ser a **pergunta completa** (ex: 'Qual a correlação de V17 com Class?')."
-#    
-#    # ⚠️ REGRAS DE BUSCA E EXTRAÇÃO DE DADOS (Vamos focar na prioridade)
-#    # Regra 3 e 4: Como extrair
-#    "3. Após usar 'buscar_memoria_EDA', leia a 'Observation' e **extraia APENAS o número ou a informação solicitada na pergunta atual.**"
-#    "4. Para extrair correlação, procure o valor na linha da variável V(n) e na coluna 'Class' dentro da tabela de estatísticas da Observation."
-#    
-#    # ⚠️ REGRAS DE FORMATAÇÃO DE RESPOSTA (Resolve o problema de repetição)
-#    "5. Depois de concluir sua análise, **VOCÊ DEVE FINALIZAR O PROCESSO COM A TAG 'Final Answer:'** seguida da sua resposta completa. Nunca gere a resposta final detalhada apenas no THOUGHT."
-#    "6. Sua resposta final DEVE ser única e relevante para a pergunta mais recente do usuário."
-#    
-#    # ⚠️ REGRAS DE USO DE CÓDIGO (Regras de contorno do NameError, ignorando gráficos por enquanto)
-#    "7. NUNCA use a ferramenta 'python_repl_ast' para tentar calcular estatísticas ou buscar colunas."
-#    "8. Se a pergunta for sobre um gráfico (e.g., boxplot), utilize a 'buscar_memoria_EDA' para obter os dados estatísticos e **forneça uma ANÁLISE TEXTUAL COMPLETA** da distribuição, explicando que não pode renderizar o boxplot visualmente."
-#)
 prefix_completo = (
     "Você é um especialista em análise de dados. Suas ferramentas são 'python_repl_ast' e 'buscar_memoria_EDA'. "
     "Sua missão é SEMPRE fornecer uma ANÁLISE DETALHADA e SEMPRE responder em Português do Brasil. "
@@ -350,25 +298,7 @@ def initial_analysis_and_memory(file_input, llm, memory):
         
         "\n\n**Gere a análise AGORA, respeitando estritamente a ordem e as tags:**"
     )
-    #initial_analysis_prompt_text = (
-    #    "Você é um analista de dados especialista e só fala Português do Brasil. "
-    #    "Sua tarefa é ler as informações estruturais e estatísticas abaixo e fornecer um "
-    #    "resumo de Análise Exploratória de Dados (EDA) detalhado. "
-#
-    #    # ⚠️ NOVO FOCO: Incluir a tabela completa
-    #    "Você DEVE incluir a tabela de estatísticas descritivas COMPLETA (df.describe()) no formato Markdown logo após o resumo textual."
-#
-    #    "\n\n--- INFORMAÇÕES DO DATAFRAME (df) ---\n"
-    #    f"ESTRUTURA (df.info()):\n{df_info_str}\n\n"
-#
-    #    # Remova a estatística descritiva daqui se já a incluiu no resumo
-    #    # Se você quiser que o LLM as processe, mantenha-as:
-    #    f"ESTATÍSTICAS (df.describe()):\n{df_describe_str}\n" 
-    #    "-------------------------------------\n\n"
-#
-    #    # ⚠️ AQUI ESTÁ O AJUSTE FINAL: Repetir a tabela no final da resposta
-    #    "Gere a análise detalhada agora. Termine sua resposta com o título 'ESTATÍSTICAS COMPLETAS' seguido da tabela de df.describe() no formato Markdown."
-    #)
+
     # --- 4. EXECUTAR O LLM DIRETAMENTE (SEM AGENTE) ---
     print("Iniciando a Análise Exploratória de Dados (EDA) para a memória (LLM Direto)...")
     
@@ -411,13 +341,6 @@ def create_and_run_agent(file_input, question, llm, memory_instance):
     tools = [
     Tool(
         name="python_repl_ast",
-        #comentado para permitir geração de graficos
-        #func=python_tool.run, 
-        #description=(
-        #    "Uma ferramenta Python (REPL) que pode executar código Python para análise e gráficos. "
-        #    "O DataFrame principal é a variável 'df' e a biblioteca Pandas é 'pd'. "
-        #    "VOCÊ NUNCA PRECISA USAR 'pd.read_csv()'. O DataFrame JÁ ESTÁ CARREGADO NA VARIÁVEL 'df'."
-        #),
         func=lambda code: execute_code_in_scope(code, df=df),
             description=(
                 "USE ESTA FERRAMENTA APENAS para gerar GRÁFICOS (boxplot, histograma, etc.). "
@@ -515,7 +438,7 @@ if st.session_state['df'] is not None and llm is not None:
         st.markdown(response)
         
         # ⚠️ 3. LÓGICA DE EXIBIÇÃO DE GRÁFICO (AJUSTE CRÍTICO AQUI)
-        
+
         TEMP_PLOT_PATH = "temp_plot.png" # Recria a constante para este escopo
         
         if os.path.exists(TEMP_PLOT_PATH):
@@ -526,26 +449,6 @@ if st.session_state['df'] is not None and llm is not None:
             
             # Opcional: Remova o arquivo para que a próxima execução não pegue o gráfico antigo
             os.remove(TEMP_PLOT_PATH) 
-
-        ## Tenta exibir o gráfico gerado (se houver)
-        ## O LangChain salva o gráfico em um buffer temporário que precisamos capturar.
-        ## Este é um padrão comum em agentes de código.
-        #try:
-        #    # O LangChain muitas vezes gera e exibe gráficos automaticamente.
-        #    # Se precisar de um controle mais fino:
-        #    # Crie uma pasta 'plots' e instrua a LLM a salvar lá.
-        #    
-        #    # Para simplificar, vamos instruir a LLM a gerar e o Streamlit a exibir o último plot.
-        #    st.write(response) # Exibe o texto da resposta
-        #    if plt.get_fignums():
-        #        # Se houver uma figura ativa após a execução do código, mostre-a
-        #        st.pyplot(plt.gcf())
-        #        
-        #except Exception as e:
-        #    st.write(f"Resposta do Agente: {response}")
-        #    st.error(f"Não foi possível exibir o gráfico. {e}")
-                
-
 else:
     st.info("Por favor, carregue um arquivo CSV e insira sua chave da API para começar.")
 
