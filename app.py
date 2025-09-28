@@ -24,6 +24,9 @@ load_dotenv()
 # Inicialização no escopo global para evitar NameError
 llm = None 
 
+# TEMP_PLOT_PATH deve ser uma constante global
+TEMP_PLOT_PATH = "temp_plot.png" 
+
 # --- Prefixo Completo para o Agente Principal ---
 #prefix_completo = (
 #    "Você é um especialista em análise de dados. Suas ferramentas são 'python_repl_ast' e 'buscar_memoria_EDA'. "
@@ -51,12 +54,38 @@ llm = None
 #    "7. NUNCA use a ferramenta 'python_repl_ast' para tentar calcular estatísticas ou buscar colunas."
 #    "8. Se a pergunta for sobre um gráfico (e.g., boxplot), utilize a 'buscar_memoria_EDA' para obter os dados estatísticos e **forneça uma ANÁLISE TEXTUAL COMPLETA** da distribuição, explicando que não pode renderizar o boxplot visualmente."
 #)
+#prefix_completo = (
+#    "Você é um especialista em análise de dados. Suas ferramentas são 'python_repl_ast' e 'buscar_memoria_EDA'. "
+#    "Sua missão é SEMPRE fornecer uma ANÁLISE DETALHADA e SEMPRE responder em Português do Brasil. "
+#    "A fonte primária e mais confiável de informação é a sua memória, acessada por 'buscar_memoria_EDA'."
+#    
+#    # ⚠️ REGRAS DE BUSCA E EXTRAÇÃO DE DADOS (AGORA FUNCIONA)
+#    
+#    # Regra 1: Ação para Resumo/Conclusões (Reforça a conversão da intenção)
+#    "1. SE A PERGUNTA DO USUÁRIO BUSCAR ANÁLISE INICIAL, CONCLUSÕES OU RESUMO, VOCÊ DEVE USAR A FERRAMENTA 'buscar_memoria_EDA' COM O **Action Input EXATO: 'Análise Exploratória Completa'**. Esta ação deve ser sua prioridade absoluta para essas perguntas."
+#
+#    # Regra 2: Ação para Dados Específicos
+#    "2. Se a pergunta for sobre um dado específico (média, correlação, desvio padrão), o Action Input deve ser a **pergunta completa** (ex: 'Qual a correlação de V17 com Class?')."
+#    
+#    # ⚠️ REGRAS DE BUSCA E EXTRAÇÃO DE DADOS (Vamos focar na prioridade)
+#    # Regra 3 e 4: Como extrair
+#    "3. Após usar 'buscar_memoria_EDA', leia a 'Observation' e **extraia APENAS o número ou a informação solicitada na pergunta atual.**"
+#    "4. Para extrair correlação, procure o valor na linha da variável V(n) e na coluna 'Class' dentro da tabela de estatísticas da Observation."
+#    
+#    # ⚠️ REGRAS DE FORMATAÇÃO DE RESPOSTA (Resolve o problema de repetição)
+#    "5. Depois de concluir sua análise, **VOCÊ DEVE FINALIZAR O PROCESSO COM A TAG 'Final Answer:'** seguida da sua resposta completa. Nunca gere a resposta final detalhada apenas no THOUGHT."
+#    "6. Sua resposta final DEVE ser única e relevante para a pergunta mais recente do usuário."
+#    
+#    # ⚠️ REGRAS DE USO DE CÓDIGO (Regras de contorno do NameError, ignorando gráficos por enquanto)
+#    "7. NUNCA use a ferramenta 'python_repl_ast' para tentar calcular estatísticas ou buscar colunas."
+#    "8. Se a pergunta for sobre um gráfico (e.g., boxplot), utilize a 'buscar_memoria_EDA' para obter os dados estatísticos e **forneça uma ANÁLISE TEXTUAL COMPLETA** da distribuição, explicando que não pode renderizar o boxplot visualmente."
+#)
 prefix_completo = (
     "Você é um especialista em análise de dados. Suas ferramentas são 'python_repl_ast' e 'buscar_memoria_EDA'. "
     "Sua missão é SEMPRE fornecer uma ANÁLISE DETALHADA e SEMPRE responder em Português do Brasil. "
     "A fonte primária e mais confiável de informação é a sua memória, acessada por 'buscar_memoria_EDA'."
     
-    # ⚠️ REGRAS DE BUSCA E EXTRAÇÃO DE DADOS (AGORA FUNCIONA)
+    # ⚠️ REGRAS DE BUSCA E EXTRAÇÃO DE DADOS 
     
     # Regra 1: Ação para Resumo/Conclusões (Reforça a conversão da intenção)
     "1. SE A PERGUNTA DO USUÁRIO BUSCAR ANÁLISE INICIAL, CONCLUSÕES OU RESUMO, VOCÊ DEVE USAR A FERRAMENTA 'buscar_memoria_EDA' COM O **Action Input EXATO: 'Análise Exploratória Completa'**. Esta ação deve ser sua prioridade absoluta para essas perguntas."
@@ -73,9 +102,15 @@ prefix_completo = (
     "5. Depois de concluir sua análise, **VOCÊ DEVE FINALIZAR O PROCESSO COM A TAG 'Final Answer:'** seguida da sua resposta completa. Nunca gere a resposta final detalhada apenas no THOUGHT."
     "6. Sua resposta final DEVE ser única e relevante para a pergunta mais recente do usuário."
     
-    # ⚠️ REGRAS DE USO DE CÓDIGO (Regras de contorno do NameError, ignorando gráficos por enquanto)
-    "7. NUNCA use a ferramenta 'python_repl_ast' para tentar calcular estatísticas ou buscar colunas."
-    "8. Se a pergunta for sobre um gráfico (e.g., boxplot), utilize a 'buscar_memoria_EDA' para obter os dados estatísticos e **forneça uma ANÁLISE TEXTUAL COMPLETA** da distribuição, explicando que não pode renderizar o boxplot visualmente."
+    # ⚠️ REGRAS DE USO DE CÓDIGO (Regras de contorno do NameError, e AGORA PERMITINDO GRÁFICOS)
+    
+    # 7. Restrição mantida para evitar cálculo de estatísticas
+    "7. NUNCA use a ferramenta 'python_repl_ast' para tentar calcular estatísticas ou buscar colunas. Para isso, use a memória (Regras 1 e 2)."
+    
+    # 8. Ação para GRÁFICOS (REATIVADA)
+    "8. Se a pergunta for sobre um GRÁFICO (e.g., boxplot, histograma, scatter plot), utilize a ferramenta **'python_repl_ast'**."
+    "O Action Input DEVE ser o código Python completo, usando 'df', 'matplotlib.pyplot as plt' e 'seaborn as sns'."
+    "EXEMPLO DE ACTION INPUT: sns.boxplot(x='Class', y='Amount', data=df); plt.title('Boxplot de Amount por Class');"
 )
 
 # --- Configurações Iniciais e Layout do Streamlit ---
@@ -96,6 +131,36 @@ if 'df' not in st.session_state:
     
 # --- Módulo 1: Carregamento de Dados (Para o Teste do Professor) ---
 from langchain_core.messages import HumanMessage, AIMessage
+
+# ⚠️ FUNÇÃO CHAVE PARA INJEÇÃO DE ESCOPO ⚠️
+def execute_code_in_scope(code: str, df: pd.DataFrame) -> str:
+    """
+    Executa o código, injetando o df, plt, sns no escopo local.
+    Salva o gráfico, se houver, e retorna o resultado da execução.
+    """
+    local_vars = {"df": df, "plt": plt, "sns": sns, "pd": pd}
+    
+    # 1. Limpa o ambiente antes de começar
+    plt.close('all') 
+    
+    try:
+        # A instrução 'exec' coloca o código no escopo de local_vars
+        exec(code, local_vars)
+        
+        # 2. Verifica se houve plotagem (a lógica de salvamento da imagem)
+        if plt.get_fignums():
+            plt.gcf().tight_layout()
+            plt.savefig(TEMP_PLOT_PATH) # Salva a imagem
+            plt.close('all')
+            return f"Gráfico gerado com sucesso e salvo em: {TEMP_PLOT_PATH}"
+        else:
+            # Retorna o valor de 'plt.show()' se houver (para código que não plota)
+            # ou simplesmente uma mensagem de sucesso
+            return "Código executado com sucesso."
+            
+    except Exception as e:
+        plt.close('all')
+        return f"Erro na execução do código Python: {e}"
 
 def smart_memory_lookup_tool(query: str, llm, memory) -> str:
     """
@@ -338,7 +403,7 @@ def create_and_run_agent(file_input, question, llm, memory_instance):
     df = pd.read_csv(file_input) 
     
     # Crie a ferramenta (sem argumentos de escopo que falham)
-    python_tool = PythonREPLTool() 
+    #python_tool = PythonREPLTool() #comentado para permitir geração de graficos
 
     # Crie a nova ferramenta de memória
     memory_tool = create_memory_tool(memory_instance, llm)
@@ -346,11 +411,18 @@ def create_and_run_agent(file_input, question, llm, memory_instance):
     tools = [
     Tool(
         name="python_repl_ast",
-        func=python_tool.run,
-        description=(
-            "Uma ferramenta Python (REPL) que pode executar código Python para análise e gráficos. "
-            "O DataFrame principal é a variável 'df' e a biblioteca Pandas é 'pd'. "
-            "VOCÊ NUNCA PRECISA USAR 'pd.read_csv()'. O DataFrame JÁ ESTÁ CARREGADO NA VARIÁVEL 'df'."
+        #comentado para permitir geração de graficos
+        #func=python_tool.run, 
+        #description=(
+        #    "Uma ferramenta Python (REPL) que pode executar código Python para análise e gráficos. "
+        #    "O DataFrame principal é a variável 'df' e a biblioteca Pandas é 'pd'. "
+        #    "VOCÊ NUNCA PRECISA USAR 'pd.read_csv()'. O DataFrame JÁ ESTÁ CARREGADO NA VARIÁVEL 'df'."
+        #),
+        func=lambda code: execute_code_in_scope(code, df=df),
+            description=(
+                "USE ESTA FERRAMENTA APENAS para gerar GRÁFICOS (boxplot, histograma, etc.). "
+                "O DataFrame está disponível como 'df', 'seaborn' como 'sns', e 'matplotlib.pyplot' como 'plt'. "
+                "A ferramenta automaticamente salva o gráfico. NUNCA use plt.show() ou plt.savefig()."
         ),
     ),
     memory_tool # Adiciona a ferramenta de memória
@@ -440,24 +512,38 @@ if st.session_state['df'] is not None and llm is not None:
         
         # Formata a resposta
         st.subheader("Resposta do Agente:")
+        st.markdown(response)
         
-        # Tenta exibir o gráfico gerado (se houver)
-        # O LangChain salva o gráfico em um buffer temporário que precisamos capturar.
-        # Este é um padrão comum em agentes de código.
-        try:
-            # O LangChain muitas vezes gera e exibe gráficos automaticamente.
-            # Se precisar de um controle mais fino:
-            # Crie uma pasta 'plots' e instrua a LLM a salvar lá.
+        # ⚠️ 3. LÓGICA DE EXIBIÇÃO DE GRÁFICO (AJUSTE CRÍTICO AQUI)
+        
+        TEMP_PLOT_PATH = "temp_plot.png" # Recria a constante para este escopo
+        
+        if os.path.exists(TEMP_PLOT_PATH):
+            st.subheader("Visualização Gerada:")
             
-            # Para simplificar, vamos instruir a LLM a gerar e o Streamlit a exibir o último plot.
-            st.write(response) # Exibe o texto da resposta
-            if plt.get_fignums():
-                # Se houver uma figura ativa após a execução do código, mostre-a
-                st.pyplot(plt.gcf())
-                
-        except Exception as e:
-            st.write(f"Resposta do Agente: {response}")
-            st.error(f"Não foi possível exibir o gráfico. {e}")
+            # Exibe a imagem salva no disco
+            st.image(TEMP_PLOT_PATH)
+            
+            # Opcional: Remova o arquivo para que a próxima execução não pegue o gráfico antigo
+            os.remove(TEMP_PLOT_PATH) 
+
+        ## Tenta exibir o gráfico gerado (se houver)
+        ## O LangChain salva o gráfico em um buffer temporário que precisamos capturar.
+        ## Este é um padrão comum em agentes de código.
+        #try:
+        #    # O LangChain muitas vezes gera e exibe gráficos automaticamente.
+        #    # Se precisar de um controle mais fino:
+        #    # Crie uma pasta 'plots' e instrua a LLM a salvar lá.
+        #    
+        #    # Para simplificar, vamos instruir a LLM a gerar e o Streamlit a exibir o último plot.
+        #    st.write(response) # Exibe o texto da resposta
+        #    if plt.get_fignums():
+        #        # Se houver uma figura ativa após a execução do código, mostre-a
+        #        st.pyplot(plt.gcf())
+        #        
+        #except Exception as e:
+        #    st.write(f"Resposta do Agente: {response}")
+        #    st.error(f"Não foi possível exibir o gráfico. {e}")
                 
 
 else:
