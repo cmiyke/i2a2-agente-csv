@@ -14,8 +14,6 @@ from langchain_experimental.tools.python.tool import PythonREPLTool
 from langchain.memory import ConversationBufferMemory
 from langchain_core.messages import HumanMessage, AIMessage # Novo import necessário
 from io import StringIO
-from langchain.tools import Tool
-from langchain.memory import ConversationBufferMemory
 from typing import Dict, Any
 
 # Carrega a variável de ambiente (Chave da API)
@@ -28,38 +26,86 @@ llm = None
 TEMP_PLOT_PATH = "temp_plot.png" 
 
 # --- Prefixo Completo para o Agente Principal ---
-prefix_completo = (
-    "Você é um especialista em análise de dados. Suas ferramentas são 'python_repl_ast' e 'buscar_memoria_EDA'. "
-    "Sua missão é SEMPRE fornecer uma ANÁLISE DETALHADA e SEMPRE responder em Português do Brasil. "
-    "A fonte primária e mais confiável de informação é a sua memória, acessada por 'buscar_memoria_EDA'."
-    
-    # ⚠️ REGRAS DE BUSCA E EXTRAÇÃO DE DADOS 
-    
-    # Regra 1: Ação para Resumo/Conclusões (Reforça a conversão da intenção)
-    "1. SE A PERGUNTA DO USUÁRIO BUSCAR ANÁLISE INICIAL, CONCLUSÕES OU RESUMO, VOCÊ DEVE USAR A FERRAMENTA 'buscar_memoria_EDA' COM O **Action Input EXATO: 'Análise Exploratória Completa'**. Esta ação deve ser sua prioridade absoluta para essas perguntas."
+#prefix_completo = (
+#    "Você é um especialista em análise de dados. Suas ferramentas são 'python_repl_ast' e 'buscar_memoria_EDA'. "
+#    "Sua missão é SEMPRE fornecer uma ANÁLISE DETALHADA e SEMPRE responder em Português do Brasil. "
+#    "A fonte primária e mais confiável de informação é a sua memória, acessada por 'buscar_memoria_EDA'."
+#    
+#    # ⚠️ REGRAS DE BUSCA E EXTRAÇÃO DE DADOS 
+#    
+#    # Regra 1: Ação para Resumo/Conclusões (Reforça a conversão da intenção)
+#    "1. SE A PERGUNTA DO USUÁRIO BUSCAR ANÁLISE INICIAL, CONCLUSÕES OU RESUMO, VOCÊ DEVE USAR A FERRAMENTA 'buscar_memoria_EDA' COM O **Action Input EXATO: 'Análise Exploratória Completa'**. Esta ação deve ser sua prioridade absoluta para essas perguntas."
+#
+#    # Regra 2: Ação para Dados Específicos
+#    "2. Se a pergunta for sobre um dado específico (média, correlação, desvio padrão), o Action Input deve ser a **pergunta completa** (ex: 'Qual a correlação de V17 com Class?')."
+#    
+#    # ⚠️ REGRAS DE BUSCA E EXTRAÇÃO DE DADOS (Vamos focar na prioridade)
+#    # Regra 3 e 4: Como extrair
+#    "3. Após usar 'buscar_memoria_EDA', leia a 'Observation' e **extraia APENAS o número ou a informação solicitada na pergunta atual.**"
+#    "4. Para extrair correlação, procure o valor na linha da variável V(n) e na coluna 'Class' dentro da tabela de estatísticas da Observation."
+#    
+#    # ⚠️ REGRAS DE FORMATAÇÃO DE RESPOSTA (Resolve o problema de repetição)
+#    "5. Depois de concluir sua análise, **VOCÊ DEVE FINALIZAR O PROCESSO COM A TAG 'Final Answer:'** seguida da sua resposta completa. Nunca gere a resposta final detalhada apenas no THOUGHT."
+#    "6. Sua resposta final DEVE ser única e relevante para a pergunta mais recente do usuário."
+#    
+#    # ⚠️ REGRAS DE USO DE CÓDIGO (Regras de contorno do NameError, e AGORA PERMITINDO GRÁFICOS)
+#    
+#    # 7. Restrição mantida para evitar cálculo de estatísticas
+#    "7. NUNCA use a ferramenta 'python_repl_ast' para tentar calcular estatísticas ou buscar colunas. Para isso, use a memória (Regras 1 e 2)."
+#    
+#    # Modificação na Regra 7a (Para forçar o uso de código mesmo após o erro de sintaxe)
+#    "7a. **FILTRO DE PRIORIDADE ANALÍTICA:** Se a pergunta exigir **análise detalhada** (outliers, correlação, discrepância), o Agente DEVE usar o **'python_repl_ast'**. Se a primeira tentativa de código falhar, o Agente deve **CORRIGIR O CÓDIGO** na próxima Action Input (e não mudar para buscar_memoria_EDA). A busca de memória só é permitida para perguntas puramente conceituais."
+#    
+#    # ⚠️ REGRA 8: AJUSTE FOCADO NA SINTAXE (mantendo a correção do loop)
+#    "8. O seu ciclo de raciocínio DEVE sempre usar os termos em inglês, mesmo que a resposta seja em português. Use APENAS os seguintes formatos, obrigatoriamente em inglês:"
+#    "   - **Thought:** [Seu raciocínio]"
+#    "   - **Action:** [Nome da Ferramenta]"
+#    "   - **Action Input:** [Entrada da Ferramenta]"
+#    "   - **Observation:** [Resultado da Ferramenta]"
+#    
+#    # Modificação na Regra 8 (ou adjacente a ela)
+#    "8.b. Para a ferramenta **'python_repl_ast'**, o Action Input DEVE ser **código Python completo e válido** que pode ser executado. NUNCA use linguagem natural, apenas código. Use 'df' para o DataFrame e 'sns' para seaborn, se necessário."
+#
+#    # ⚠️ REGRA 9: SAÍDA FINAL E PARADA OBRIGATÓRIA
+#    "9. **ESTRUTURA DE PARADA:** Após uma 'Observation' da ferramenta 'buscar_memoria_EDA', se a informação for suficiente para responder à pergunta (como 'Quais as conclusões...'), você DEVE PARAR o ciclo de 'Action' e seguir estritamente este formato, e NADA MAIS:"
+#    "   Thought: [Seu raciocínio final para a conclusão, SEM NENHUMA MENÇÃO A NOVAS 'Actions'].\n"
+#    "   Final Answer: [Sua resposta final em português, usando a informação da Observation]."
+#    "NÃO use a 'Action:' se você já pode gerar a 'Final Answer:'."
+#)
 
-    # Regra 2: Ação para Dados Específicos
-    "2. Se a pergunta for sobre um dado específico (média, correlação, desvio padrão), o Action Input deve ser a **pergunta completa** (ex: 'Qual a correlação de V17 com Class?')."
+prefix_completo = (
+    "Você é um Agente de Análise de Dados (EDA) especialista em Python, com a tarefa de analisar o DataFrame 'df'."
+    "Seu objetivo é ajudar o usuário a entender os dados e gerar gráficos."
     
-    # ⚠️ REGRAS DE BUSCA E EXTRAÇÃO DE DADOS (Vamos focar na prioridade)
-    # Regra 3 e 4: Como extrair
-    "3. Após usar 'buscar_memoria_EDA', leia a 'Observation' e **extraia APENAS o número ou a informação solicitada na pergunta atual.**"
-    "4. Para extrair correlação, procure o valor na linha da variável V(n) e na coluna 'Class' dentro da tabela de estatísticas da Observation."
+    # 1. Regras Gerais
+    "1. Responda em Português."
+    "2. Utilize a ferramenta 'buscar_memoria_EDA' APENAS para responder a perguntas conceituais ou de resumo (ex: 'Quais as conclusões da análise?')."
+    "3. Use a ferramenta 'python_repl_ast' APENAS para gerar GRÁFICOS (boxplot, histograma, etc.) ou realizar cálculos."
+    "4. Ao gerar gráficos, use apenas colunas relevantes do 'df'."
+    "5. NUNCA mencione o uso da ferramenta, o código executado ou a 'Observation' na sua Resposta Final."
+
+    # 2. Regras de Prioridade Analítica (Anti-Loop)
+    "6. NUNCA repita uma 'Action' cuja 'Observation' não forneceu a informação necessária. Isso gera um loop."
+    "7. Se a pergunta for sobre correlação, outlier, discrepância, ou exigir qualquer tipo de GRÁFICO, NÃO utilize a ferramenta 'buscar_memoria_EDA'."
     
-    # ⚠️ REGRAS DE FORMATAÇÃO DE RESPOSTA (Resolve o problema de repetição)
-    "5. Depois de concluir sua análise, **VOCÊ DEVE FINALIZAR O PROCESSO COM A TAG 'Final Answer:'** seguida da sua resposta completa. Nunca gere a resposta final detalhada apenas no THOUGHT."
-    "6. Sua resposta final DEVE ser única e relevante para a pergunta mais recente do usuário."
+    "7a. **FILTRO DE PRIORIDADE ANALÍTICA:** Se a pergunta exigir **análise detalhada** (outliers, correlação, discrepância, comportamento fora do padrão), o Agente DEVE usar o **'python_repl_ast'** como a sua **PRIMEIRA AÇÃO** para obter a evidência visual. O Agente NÃO deve buscar a memória ('buscar_memoria_EDA')."
+
+    # 3. Regras de Sintaxe e Parsing (Fixando Loops)
+    "8. O seu ciclo de raciocínio DEVE sempre usar os termos em inglês. Use APENAS os seguintes formatos:"
+    "   - **Thought:** [Seu raciocínio]"
+    "   - **Action:** [Nome da Ferramenta]"
+    "   - **Action Input:** [Entrada da Ferramenta]"
+    "   - **Observation:** [Resultado da Ferramenta]"
     
-    # ⚠️ REGRAS DE USO DE CÓDIGO (Regras de contorno do NameError, e AGORA PERMITINDO GRÁFICOS)
-    
-    # 7. Restrição mantida para evitar cálculo de estatísticas
-    "7. NUNCA use a ferramenta 'python_repl_ast' para tentar calcular estatísticas ou buscar colunas. Para isso, use a memória (Regras 1 e 2)."
-    
-    # 8. Ação para GRÁFICOS (REATIVADA)
-    "8. Se a pergunta for sobre um GRÁFICO (e.g., boxplot, histograma, scatter plot), utilize a ferramenta **'python_repl_ast'**."
-    "O Action Input DEVE ser o código Python completo, usando 'df', 'matplotlib.pyplot as plt' e 'seaborn as sns'."
-    "EXEMPLO DE ACTION INPUT: sns.boxplot(x='Class', y='Amount', data=df); plt.title('Boxplot de Amount por Class');"
-)
+    "8.a. Para 'python_repl_ast', o Action Input DEVE ser **código Python válido** (e não linguagem natural)."
+    # Modificação na Regra 8.b: FORÇANDO plt.show()
+    "8.b. Para garantir estabilidade, o código do gráfico DEVE SEMPRE terminar com um comando de exibição, como `plt.show()`."
+
+    # Modificação na Regra 9: FORÇANDO CONTINUIDADE
+    "9. **ESTRUTURA DE PARADA E ANÁLISE FINAL:** Quando a 'Observation' for satisfatória, sua próxima e ÚLTIMA saída DEVE ser **em sequência direta** (sem linhas em branco desnecessárias) e seguir estritamente este formato: Thought: [Sua análise para a conclusão].\nFinal Answer: [Sua resposta concisa e analítica]."    # 4. Regras de Parada (Fixando Final Answer Loop)
+    "   Thought: [Seu raciocínio final para a conclusão da análise, SEM NENHUMA MENÇÃO A NOVAS 'Actions'].\n"
+    "   Final Answer: [Sua resposta final em português, que DEVE conter uma análise concisa do gráfico ou da informação obtida. NUNCA repita 'O gráfico foi gerado com sucesso.']."
+    "NÃO use a 'Action:' se você já pode gerar a 'Final Answer:'.")
 
 # --- Configurações Iniciais e Layout do Streamlit ---
 
@@ -188,10 +234,15 @@ def create_memory_tool(memory_instance: ConversationBufferMemory, llm_instance) 
 
 # Modifique a função load_data para chamar a nova função:
 def load_data(uploaded_file, llm_instance): 
+    # Obtém o delimitador da sessão.
+    # Se você quiser passar isso como argumento, altere a chamada da função.
+    # Mas se for executado no Streamlit, usar o st.session_state é prático.
+    delimiter = st.session_state.get('delimiter', ',') 
+    
     """Carrega o CSV, cria a memória, e delega a geração de análise inicial."""
     try:
         # 1. LÊ e salva o DF (apenas para exibição e a primeira leitura rápida)
-        df = pd.read_csv(uploaded_file)
+        df = pd.read_csv(uploaded_file, sep=delimiter)
         
         # 2. Reinicia o ponteiro do arquivo.
         uploaded_file.seek(0)
@@ -266,9 +317,12 @@ def run_llm_analysis(df, prompt, llm):
 
 # Função para realizar a análise exploratória e salvar na memória
 def initial_analysis_and_memory(file_input, llm, memory):
+    # Obtém o delimitador da sessão.
+    delimiter = st.session_state.get('delimiter', ',')
+    
     # --- 1. CARREGAR O DATAFRAME FORA DO AGENTE ---
     file_input.seek(0) 
-    df = pd.read_csv(file_input) 
+    df = pd.read_csv(file_input, sep=delimiter) 
 
     # --- 2. GERAR O CONTEXTO MANUALMENTE (RESOLVENDO FALHA DE ESCOPO) ---
     
@@ -330,7 +384,10 @@ def create_and_run_agent(file_input, question, llm, memory_instance):
     file_input.seek(0) 
     
     # Carregar o DataFrame
-    df = pd.read_csv(file_input) 
+    df = pd.read_csv(file_input, sep=st.session_state.get('delimiter', ',')) 
+
+    # ⚠️ NOVO PASSO: INJETAR COLUNAS NO PROMPT
+    df_columns = ", ".join(df.columns.tolist())
     
     # Crie a ferramenta (sem argumentos de escopo que falham)
     #python_tool = PythonREPLTool() #comentado para permitir geração de graficos
@@ -339,17 +396,39 @@ def create_and_run_agent(file_input, question, llm, memory_instance):
     memory_tool = create_memory_tool(memory_instance, llm)
        
     tools = [
-    Tool(
-        name="python_repl_ast",
-        func=lambda code: execute_code_in_scope(code, df=df),
-            description=(
-                "USE ESTA FERRAMENTA APENAS para gerar GRÁFICOS (boxplot, histograma, etc.). "
-                "O DataFrame está disponível como 'df', 'seaborn' como 'sns', e 'matplotlib.pyplot' como 'plt'. "
-                "A ferramenta automaticamente salva o gráfico. NUNCA use plt.show() ou plt.savefig()."
+        Tool(
+            name="python_repl_ast",
+            func=lambda code: execute_code_in_scope(code, df=df),
+                description=(
+                    "USE ESTA FERRAMENTA APENAS para gerar GRÁFICOS (boxplot, histograma, etc.). "
+                    "O DataFrame está disponível como 'df', 'seaborn' como 'sns', e 'matplotlib.pyplot' como 'plt'. "
+                    "A ferramenta automaticamente salva o gráfico. NUNCA use plt.show() ou plt.savefig()."
+            ),
         ),
-    ),
-    memory_tool # Adiciona a ferramenta de memória
-]
+        memory_tool # Adiciona a ferramenta de memória
+    ]
+
+    # 3. INJEÇÃO DE INFORMAÇÕES NO PROMPT
+    df_columns = ", ".join(df.columns.tolist())
+    tool_names_string = ", ".join([t.name for t in tools])
+    
+    # ⚠️ PASSO 1: Criar uma string com AS SUAS VARIÁVEIS INJETADAS (Usando f-string)
+    custom_instruction = (
+        f"As colunas do DataFrame atual são: {df_columns}. "
+        f"Você tem acesso às ferramentas: {tool_names_string}.\n\n"
+    )
+
+    # 2. PASSO 2: Criar uma string de template com os PLACEHOLDERS DO FRAMEWORK
+    react_memory_template = (
+        "Histórico da Conversa: {chat_history}\n"
+        "Histórico de Pensamento/Ação: {agent_scratchpad}\n"
+        "Pergunta Atual: {input}\n\n" 
+
+        # ⚠️ AJUSTE CRÍTICO AQUI: ADICIONAR UMA QUEBRA DE LINHA EXTRA
+        "\nComece seu raciocínio (Thought):" 
+    )
+    # 3. PASSO 3: Concatenar para formar o suffix final (sem formatação, pois já foi feito no custom_instruction)
+    final_suffix = custom_instruction + react_memory_template
 
     # 3. Criar o Agente usando initialize_agent
     agent = initialize_agent(
@@ -362,7 +441,9 @@ def create_and_run_agent(file_input, question, llm, memory_instance):
         
         # Injetar o prefixo
         agent_kwargs={
-            "prefix": prefix_completo
+            "prefix": prefix_completo,
+            "suffix": final_suffix,
+            "input_variables": ["input", "chat_history", "agent_scratchpad"]
         },
         # Adicionar o handle_parsing_errors no executor
         handle_parsing_errors=True,
@@ -370,6 +451,11 @@ def create_and_run_agent(file_input, question, llm, memory_instance):
     
     # 4. Executar o Agente
     response = agent.run(question)
+    # ⚠️ CORREÇÃO PÓS-PROCESSAMENTO (SE NECESSÁRIO)
+    # Garante que a resposta final comece no Final Answer: e remove lixo do raciocínio
+    if "Final Answer:" in response:
+        response = response.split("Final Answer:", 1)[-1].strip()
+
     return response
 
 
@@ -379,6 +465,20 @@ with st.sidebar:
     st.header("Upload do Dataset")
     uploaded_file = st.file_uploader("Escolha um arquivo CSV", type="csv")
     
+    # ⚠️ NOVO CAMPO: INPUT DO DELIMITADOR
+    delimiter_input = st.sidebar.text_input(
+        "Caractere Separador de Colunas (Delimitador)", 
+        value=",", # Sugestão inicial de ponto e vírgula
+        max_chars=1
+    )
+
+    # Salva o delimitador na sessão (usado para garantir que o LLM use o valor correto)
+    if delimiter_input:
+        st.session_state['delimiter'] = delimiter_input
+    else:
+        # Caso o usuário apague o campo, assume a vírgula como padrão da internet
+        st.session_state['delimiter'] = ','
+
     st.header("Configuração da LLM")
     api_key = os.getenv("OPENAI_API_KEY", "") 
     openai_api_key = st.text_input("Sua Chave OpenAI API", type="password", value=api_key)
