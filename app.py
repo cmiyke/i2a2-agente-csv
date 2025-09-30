@@ -90,22 +90,24 @@ prefix_completo = (
     
     "7a. **FILTRO DE PRIORIDADE ANALÍTICA:** Se a pergunta exigir **análise detalhada** (outliers, correlação, discrepância, comportamento fora do padrão), o Agente DEVE usar o **'python_repl_ast'** como a sua **PRIMEIRA AÇÃO** para obter a evidência visual. O Agente NÃO deve buscar a memória ('buscar_memoria_EDA')."
 
-    # 3. Regras de Sintaxe e Parsing (Fixando Loops)
-    "8. O seu ciclo de raciocínio DEVE sempre usar os termos em inglês. Use APENAS os seguintes formatos:"
+    # Modificação na Regra 8 (Ajuste crítico de idioma)
+    "8. O seu ciclo de raciocínio DEVE sempre usar os termos em inglês. Use APENAS os seguintes formatos, **e somente eles, estritamente em inglês**: "
     "   - **Thought:** [Seu raciocínio]"
     "   - **Action:** [Nome da Ferramenta]"
     "   - **Action Input:** [Entrada da Ferramenta]"
     "   - **Observation:** [Resultado da Ferramenta]"
+    "   - **Final Answer:** [Sua resposta final em português]"
     
     "8.a. Para 'python_repl_ast', o Action Input DEVE ser **código Python válido** (e não linguagem natural)."
     # Modificação na Regra 8.b: FORÇANDO plt.show()
     "8.b. Para garantir estabilidade, o código do gráfico DEVE SEMPRE terminar com um comando de exibição, como `plt.show()`."
 
     # Modificação na Regra 9: FORÇANDO CONTINUIDADE
-    "9. **ESTRUTURA DE PARADA E ANÁLISE FINAL:** Quando a 'Observation' for satisfatória, sua próxima e ÚLTIMA saída DEVE ser **em sequência direta** (sem linhas em branco desnecessárias) e seguir estritamente este formato: Thought: [Sua análise para a conclusão].\nFinal Answer: [Sua resposta concisa e analítica]."    # 4. Regras de Parada (Fixando Final Answer Loop)
+    "9. **ESTRUTURA DE PARADA E ANÁLISE FINAL:** Quando uma 'Observation' for satisfatória, sua próxima e ÚLTIMA saída DEVE ser **em sequência direta** (sem linhas em branco desnecessárias ou texto extra no final) e seguir estritamente este formato: Thought: [Sua análise para a conclusão].\nFinal Answer: [Sua resposta concisa e analítica em português]."
     "   Thought: [Seu raciocínio final para a conclusão da análise, SEM NENHUMA MENÇÃO A NOVAS 'Actions'].\n"
     "   Final Answer: [Sua resposta final em português, que DEVE conter uma análise concisa do gráfico ou da informação obtida. NUNCA repita 'O gráfico foi gerado com sucesso.']."
-    "NÃO use a 'Action:' se você já pode gerar a 'Final Answer:'.")
+    "NÃO use a 'Action:' se você já pode gerar a 'Final Answer:'."
+)
 
 # --- Configurações Iniciais e Layout do Streamlit ---
 
